@@ -1,16 +1,19 @@
-version: '3.8'
-
 services:
   zonos:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: zonos_container
-    runtime: nvidia
-    network_mode: "host"
-    stdin_open: true
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./voice:/app/voice
+      - ./outputs:/app/outputs
     tty: true
-    command: ["python3", "gradio_interface.py"]
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=0
-      - GRADIO_SHARE=False
+    stdin_open: true
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]

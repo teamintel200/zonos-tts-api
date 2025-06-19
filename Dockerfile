@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel
 RUN pip install uv
 
 RUN apt update && \
@@ -8,4 +8,8 @@ RUN apt update && \
 WORKDIR /app
 COPY . ./
 
-RUN uv pip install --system -e . && uv pip install --system -e .[compile]
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install -e .
+
+# FastAPI 서버 실행
+CMD ["uvicorn", "tts_api:app", "--host", "0.0.0.0", "--port", "8000"]
