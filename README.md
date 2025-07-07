@@ -1,159 +1,104 @@
-# Zonos-v0.1
+# gTTS FastAPI 서버
 
-<div align="center">
-<img src="assets/ZonosHeader.png" 
-     alt="Alt text" 
-     style="width: 500px;
-            height: auto;
-            object-position: center top;">
-</div>
+이 프로젝트는 gTTS를 사용하여 텍스트를 음성으로 변환하는 간단한 FastAPI 서버입니다.
 
-<div align="center">
-  <a href="https://discord.gg/gTW9JwST8q" target="_blank">
-    <img src="https://img.shields.io/badge/Join%20Our%20Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white" alt="Discord">
-  </a>
-</div>
+## Docker Compose로 실행 (권장)
 
----
+이 방법은 애플리케이션을 실행하는 가장 권장되는 방법입니다. Docker Compose를 사용하여 이미지를 빌드하고 컨테이너를 실행하므로, FFmpeg를 포함한 모든 의존성이 올바르게 설치되고 구성됩니다.
 
-Zonos-v0.1 is a leading open-weight text-to-speech model trained on more than 200k hours of varied multilingual speech, delivering expressiveness and quality on par with—or even surpassing—top TTS providers.
-
-Our model enables highly natural speech generation from text prompts when given a speaker embedding or audio prefix, and can accurately perform speech cloning when given a reference clip spanning just a few seconds. The conditioning setup also allows for fine control over speaking rate, pitch variation, audio quality, and emotions such as happiness, fear, sadness, and anger. The model outputs speech natively at 44kHz.
-
-##### For more details and speech samples, check out our blog [here](https://www.zyphra.com/post/beta-release-of-zonos-v0-1)
-
-##### We also have a hosted version available at [playground.zyphra.com/audio](https://playground.zyphra.com/audio)
-
----
-
-Zonos follows a straightforward architecture: text normalization and phonemization via eSpeak, followed by DAC token prediction through a transformer or hybrid backbone. An overview of the architecture can be seen below.
-
-<div align="center">
-<img src="assets/ArchitectureDiagram.png" 
-     alt="Alt text" 
-     style="width: 1000px;
-            height: auto;
-            object-position: center top;">
-</div>
-
----
-
-## Usage
-
-### Python
-
-```python
-import torch
-import torchaudio
-from zonos.model import Zonos
-from zonos.conditioning import make_cond_dict
-from zonos.utils import DEFAULT_DEVICE as device
-
-# model = Zonos.from_pretrained("Zyphra/Zonos-v0.1-hybrid", device=device)
-model = Zonos.from_pretrained("Zyphra/Zonos-v0.1-transformer", device=device)
-
-wav, sampling_rate = torchaudio.load("assets/exampleaudio.mp3")
-speaker = model.make_speaker_embedding(wav, sampling_rate)
-
-cond_dict = make_cond_dict(text="Hello, world!", speaker=speaker, language="en-us")
-conditioning = model.prepare_conditioning(cond_dict)
-
-codes = model.generate(conditioning)
-
-wavs = model.autoencoder.decode(codes).cpu()
-torchaudio.save("sample.wav", wavs[0], model.autoencoder.sampling_rate)
-```
-
-### Gradio interface (recommended)
+### 서버 실행
 
 ```bash
-uv run gradio_interface.py
-# python gradio_interface.py
+docker-compose up --build
 ```
 
-This should produce a `sample.wav` file in your project root directory.
+서버는 `http://localhost:8000`에서 사용할 수 있습니다.
 
-_For repeated sampling we highly recommend using the gradio interface instead, as the minimal example needs to load the model every time it is run._
+## API 엔드포인트
 
-## Features
+이 서비스는 텍스트를 음성으로 변환하고(tts_simple), 생성된 음성 파일들을 하나로 합치는(combine_wav) 두 가지 엔드포인트를 제공합니다.
 
-- Zero-shot TTS with voice cloning: Input desired text and a 10-30s speaker sample to generate high quality TTS output
-- Audio prefix inputs: Add text plus an audio prefix for even richer speaker matching. Audio prefixes can be used to elicit behaviours such as whispering which can otherwise be challenging to replicate when cloning from speaker embeddings
-- Multilingual support: Zonos-v0.1 supports English, Japanese, Chinese, French, and German
-- Audio quality and emotion control: Zonos offers fine-grained control of many aspects of the generated audio. These include speaking rate, pitch, maximum frequency, audio quality, and various emotions such as happiness, anger, sadness, and fear.
-- Fast: our model runs with a real-time factor of ~2x on an RTX 4090 (i.e. generates 2 seconds of audio per 1 second of compute time)
-- Gradio WebUI: Zonos comes packaged with an easy to use gradio interface to generate speech
-- Simple installation and deployment: Zonos can be installed and deployed simply using the docker file packaged with our repository.
+### 1. POST /tts_simple
 
-## Installation
+지정된 임시 디렉토리(`tempdir`)에 텍스트 세그먼트별로 음성 파일을 생성합니다. `tempdir`는 각 작업 세션을 구분하는 고유한 이름으로 사용됩니다.
 
-#### System requirements
+**요청 본문 (Request Body):**
 
-- **Operating System:** Linux (preferably Ubuntu 22.04/24.04), macOS
-- **GPU:** 6GB+ VRAM, Hybrid additionally requires a 3000-series or newer Nvidia GPU
-
-Note: Zonos can also run on CPU provided there is enough free RAM. However, this will be a lot slower than running on a dedicated GPU, and likely won't be sufficient for interactive use.
-
-For experimental windows support check out [this fork](https://github.com/sdbds/Zonos-for-windows).
-
-See also [Docker Installation](#docker-installation)
-
-#### System dependencies
-
-Zonos depends on the eSpeak library phonemization. You can install it on Ubuntu with the following command:
-
-```bash
-apt install -y espeak-ng # For Ubuntu
-# brew install espeak-ng # For MacOS
+```json
+{
+  "segments": [
+    { "id": 1, "text": "안녕하세요." },
+    { "id": 2, "text": "반갑습니다." }
+  ],
+  "tempdir": "내_고유한_세션_이름"  // 이 세션 이름을 기억해두세요!
+}
 ```
 
-#### Python dependencies
+**응답 (Response):**
 
-We highly recommend using a recent version of [uv](https://docs.astral.sh/uv/#installation) for installation. If you don't have uv installed, you can install it via pip: `pip install -U uv`.
-
-##### Installing into a new uv virtual environment (recommended)
-
-```bash
-uv sync
-uv sync --extra compile # optional but needed to run the hybrid
-uv pip install -e .
+```json
+[
+  {
+    "sequence": 1,
+    "text": "안녕하세요.",
+    "durationMillis": 1500,
+    "path": "outputs/내_고유한_세션_이름/audio/tts/0001.mp3"
+  },
+  {
+    "sequence": 2,
+    "text": "반갑습니다.",
+    "durationMillis": 1200,
+    "path": "outputs/내_고유한_세션_이름/audio/tts/0002.mp3"
+  }
+]
 ```
 
-##### Installing into the system/actived environment using uv
+### 2. POST /combine_wav
 
-```bash
-uv pip install -e .
-uv pip install -e .[compile] # optional but needed to run the hybrid
+`/tts_simple`에서 사용했던 `tempdir`에 생성된 모든 음성 파일들을 하나의 WAV 파일로 합칩니다. 합쳐진 후에는 해당 `tempdir` 디렉토리는 자동으로 삭제됩니다.
+
+**요청 본문 (Request Body):**
+
+```json
+{
+  "tempdir": "내_고유한_세션_이름"  // /tts_simple 에서 사용했던 세션 이름을 그대로 입력!
+}
 ```
 
-##### Installing into the system/actived environment using pip
+**응답 (Response):**
 
-```bash
-pip install -e .
-pip install --no-build-isolation -e .[compile] # optional but needed to run the hybrid
+```json
+{
+  "combined_path": "outputs/combined_내_고유한_세션_이름.wav",
+  "durationMillis": 2700
+}
 ```
 
-##### Confirm that it's working
+## 로컬 개발 (Docker 없이)
 
-For convenience we provide a minimal example to check that the installation works:
+Docker 없이 로컬에서 애플리케이션을 실행하려면, 시스템에 FFmpeg가 설치되어 있어야 합니다.
+
+### 필수 조건
+
+-   **Python 3.9+**
+-   **FFmpeg**: macOS에서는 Homebrew를 사용하여 설치할 수 있습니다:
+    ```bash
+    brew install ffmpeg
+    ```
+    다른 운영 체제의 경우, 공식 FFmpeg 문서를 참조하십시오.
+
+### 설치
+
+pip을 사용하여 필요한 Python 패키지를 설치합니다:
 
 ```bash
-uv run sample.py
-# python sample.py
+pip install -r requirements.txt
 ```
 
-## Docker installation
+### 서버 실행
+
+FastAPI 서버를 실행하려면 다음 명령어를 사용하십시오:
 
 ```bash
-git clone https://github.com/Zyphra/Zonos.git
-cd Zonos
-
-# For gradio
-docker compose up
-
-# Or for development you can do
-docker build -t zonos .
-docker run -it --gpus=all --net=host -v /path/to/Zonos:/Zonos -t zonos
-cd /Zonos
-python sample.py # this will generate a sample.wav in /Zonos
+python -m uvicorn tts_api:app --reload
 ```

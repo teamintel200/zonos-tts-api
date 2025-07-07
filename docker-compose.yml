@@ -1,19 +1,8 @@
+version: '3.8'
 services:
-  zonos:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: zonos_container
+  app:
+    build: .
     ports:
       - "8000:8000"
     volumes:
-      - ./voice:/app/voice
       - ./outputs:/app/outputs
-    tty: true
-    stdin_open: true
-    runtime: nvidia
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
