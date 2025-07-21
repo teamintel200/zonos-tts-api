@@ -15,7 +15,7 @@ class CombineRequest(BaseModel):
 class ElevenLabsTTSRequest(BaseModel):
     segments: List[Segment]
     tempdir: str
-    api_key: str
+    api_key: Optional[str] = None  # Optional - will use environment variable if not provided
     voice_id: Optional[str] = None
     stability: Optional[float] = Field(default=0.5, ge=0.0, le=1.0)
     similarity_boost: Optional[float] = Field(default=0.8, ge=0.0, le=1.0)
@@ -26,7 +26,7 @@ class ElevenLabsTTSRequest(BaseModel):
     output_format: Optional[str] = Field(default="mp3_44100_128")  # 오디오 품질
 
 class VoicesRequest(BaseModel):
-    api_key: str
+    api_key: Optional[str] = None  # Optional - will use environment variable if not provided
 
 class Voice(BaseModel):
     voice_id: str
@@ -37,5 +37,5 @@ class Voice(BaseModel):
 class SpeedAdjustRequest(BaseModel):
     input_file: str  # 입력 파일 경로
     speed_rate: float = Field(default=1.5, ge=0.25, le=4.0)  # 속도 배율
-    method: str = Field(default="librosa", regex="^(librosa|pydub)$")  # 속도 조절 방법
+    method: str = Field(default="librosa", pattern="^(librosa|pydub)$")  # 속도 조절 방법
     preserve_pitch: bool = Field(default=True)  # 피치 유지 여부

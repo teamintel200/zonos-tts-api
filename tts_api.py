@@ -7,6 +7,10 @@ from gtts import gTTS
 from pydub import AudioSegment
 import shutil
 import glob
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 from schemas import Segment, TTSRequest, CombineRequest, ElevenLabsTTSRequest, VoicesRequest, SpeedAdjustRequest
 from utils import get_next_output_filename, validate_audio_files_for_combine, get_combined_output_path, OUTPUTS_DIR
@@ -23,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 # Initialize ElevenLabs service
 elevenlabs_service = ElevenLabsService()
+
+# Get default API key from environment
+DEFAULT_ELEVENLABS_API_KEY = os.getenv("ELEVEN_LABS_APIKEY")
 
 @app.post("/tts_simple")
 async def tts_simple(req: TTSRequest = Body(...)):
@@ -47,10 +54,13 @@ async def tts_simple(req: TTSRequest = Body(...)):
 
 @app.post("/tts_elevenlabs")
 async def tts_elevenlabs(req: ElevenLabsTTSRequest = Body(...)):
+    # Use environment API key if not provided in request
+    api_key = req.api_key or DEFAULT_ELEVENLABS_API_KEY
+    
     # Input validation
-    if not req.api_key or not req.api_key.strip():
+    if not api_key or not api_key.strip():
         logger.warning("ElevenLabs TTS request failed: Missing API key")
-        raise HTTPException(status_code=400, detail="API key is required")
+        raise HTTPException(status_code=400, detail="API key is required (provide in request or set ELEVEN_LABS_APIKEY environment variable)")
     
     if not req.segments:
         logger.warning("ElevenLabs TTS request failed: No segments provided")
@@ -90,7 +100,7 @@ async def tts_elevenlabs(req: ElevenLabsTTSRequest = Body(...)):
         try:
             # Generate audio using ElevenLabs service
             audio_data = elevenlabs_service.text_to_speech(
-                api_key=req.api_key,
+                api_key=api_key,
                 text=segment.text,
                 voice_id=req.voice_id,
                 stability=req.stability,
@@ -280,16 +290,19 @@ async def get_elevenlabs_voices(req: VoicesRequest = Body(...)):
     Raises:
         HTTPException: For authentication errors or API failures
     """
+    # Use environment API key if not provided in request
+    api_key = req.api_key or DEFAULT_ELEVENLABS_API_KEY
+    
     # Input validation
-    if not req.api_key or not req.api_key.strip():
+    if not api_key or not api_key.strip():
         logger.warning("ElevenLabs voices request failed: Missing API key")
-        raise HTTPException(status_code=400, detail="API key is required")
+        raise HTTPException(status_code=400, detail="API key is required (provide in request or set ELEVEN_LABS_APIKEY environment variable)")
     
     logger.info("Processing ElevenLabs voices request")
     
     try:
         # Get available voices using ElevenLabs service
-        voices_list = elevenlabs_service.get_available_voices(req.api_key)
+        voices_list = elevenlabs_service.get_available_voices(api_key)
         
         # Convert to dict format for JSON response
         voices_response = [
@@ -354,10 +367,13 @@ async def get_elevenlabs_voice_sample(voice_id: str, req: VoicesRequest = Body(.
     Raises:
         HTTPException: For authentication errors, invalid voice_id, or API failures
     """
+    # Use environment API key if not provided in request
+    api_key = req.api_key or DEFAULT_ELEVENLABS_API_KEY
+    
     # Input validation
-    if not req.api_key or not req.api_key.strip():
+    if not api_key or not api_key.strip():
         logger.warning(f"ElevenLabs voice sample request failed: Missing API key for voice {voice_id}")
-        raise HTTPException(status_code=400, detail="API key is required")
+        raise HTTPException(status_code=400, detail="API key is required (provide in request or set ELEVEN_LABS_APIKEY environment variable)")
     
     if not voice_id or not voice_id.strip():
         logger.warning("ElevenLabs voice sample request failed: Missing voice_id")
@@ -367,7 +383,7 @@ async def get_elevenlabs_voice_sample(voice_id: str, req: VoicesRequest = Body(.
     
     try:
         # Get voice sample using ElevenLabs service
-        audio_data = elevenlabs_service.get_voice_preview(req.api_key, voice_id)
+        audio_data = elevenlabs_service.get_voice_preview(api_key, voice_id)
         
         # Create streaming response with audio data
         audio_stream = io.BytesIO(audio_data)

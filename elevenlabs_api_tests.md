@@ -22,7 +22,7 @@
 curl -X POST "http://localhost:8000/tts_elevenlabs" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528",
+    "api_key": "",
     "voice_id": "hyuk",
     "segments": [
       {
@@ -43,7 +43,7 @@ curl -X POST "http://localhost:8000/tts_elevenlabs" \
 curl -X POST "http://localhost:8000/tts_elevenlabs" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528",
+    "api_key": "",
     "voice_id": "hyuk",
     "segments": [
       {
@@ -64,7 +64,7 @@ curl -X POST "http://localhost:8000/tts_elevenlabs" \
 curl -X POST "http://localhost:8000/tts_elevenlabs" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528",
+    "api_key": "",
     "voice_id": "laura",
     "segments": [
       {
@@ -85,7 +85,7 @@ curl -X POST "http://localhost:8000/tts_elevenlabs" \
 curl -X POST "http://localhost:8000/tts_elevenlabs" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528",
+    "api_key": "",
     "voice_id": "aria",
     "segments": [
       {
@@ -107,7 +107,7 @@ curl -X POST "http://localhost:8000/tts_elevenlabs" \
 curl -X POST "http://localhost:8000/tts_elevenlabs" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528",
+    "api_key": "",
     "voice_id": "eric",
     "segments": [
       {
@@ -123,7 +123,7 @@ curl -X POST "http://localhost:8000/tts_elevenlabs" \
 curl -X POST "http://localhost:8000/tts_elevenlabs" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528",
+    "api_key": "",
     "voice_id": "eric",
     "segments": [
       {
@@ -226,7 +226,7 @@ TEXT="안녕하세요. 이것은 다양한 감정 표현 테스트입니다."
 curl -X POST "http://localhost:8000/tts_elevenlabs" \
   -H "Content-Type: application/json" \
   -d "{
-    \"api_key\": \"sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528\",
+    \"api_key\": \"\",
     \"voice_id\": \"hyuk\",
     \"segments\": [{\"id\": 1, \"text\": \"$TEXT\"}],
     \"tempdir\": \"neutral_test\",
@@ -237,7 +237,7 @@ curl -X POST "http://localhost:8000/tts_elevenlabs" \
 curl -X POST "http://localhost:8000/tts_elevenlabs" \
   -H "Content-Type: application/json" \
   -d "{
-    \"api_key\": \"sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528\",
+    \"api_key\": \"\",
     \"voice_id\": \"hyuk\",
     \"segments\": [{\"id\": 1, \"text\": \"$TEXT\"}],
     \"tempdir\": \"emotional_test\",

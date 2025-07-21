@@ -7,3 +7,8 @@ uvicorn
 email-validator>=2.0
 dnspython
 elevenlabs
+librosa
+soundfile
+scipy
+requests
+python-dotenv

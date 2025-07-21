@@ -28,7 +28,7 @@ INFO:     Waiting for application startup.
 curl -X POST "http://localhost:8000/tts_elevenlabs" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528",
+    "api_key": "",
     "segments": [
       {
         "id": 1,
@@ -49,7 +49,7 @@ curl -X POST "http://localhost:8000/tts_elevenlabs" \
 curl -X POST "http://localhost:8000/tts_elevenlabs" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528",
+    "api_key": "",
     "segments": [
       {
         "id": 1,
@@ -131,7 +131,7 @@ afplay outputs/combined_my_test_session.wav
 curl -X POST "http://localhost:8000/voices/elevenlabs" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528"
+    "api_key": ""
   }'
 ```
 
@@ -141,7 +141,7 @@ curl -X POST "http://localhost:8000/voices/elevenlabs" \
 curl -X POST "http://localhost:8000/voices/elevenlabs/21m00Tcm4TlvDq8ikWAM/sample" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528"
+    "api_key": ""
   }' \
   --output rachel_sample.mp3
 
@@ -223,7 +223,7 @@ curl -X POST "http://localhost:8000/tts_simple" \
 curl -X POST "http://localhost:8000/tts_elevenlabs" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528",
+    "api_key": "",
     "segments": [
       {
         "id": 2,
@@ -250,7 +250,7 @@ curl -X POST "http://localhost:8000/combine_wav" \
 time curl -X POST "http://localhost:8000/tts_elevenlabs" \
   -H "Content-Type: application/json" \
   -d '{
-    "api_key": "sk_c25429e2769e86f0e814a5bc533c163b6cba923acdbcc528",
+    "api_key": "",
     "segments": [{"id": 1, "text": "성능 테스트"}],
     "tempdir": "performance_test"
   }'

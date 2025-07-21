@@ -6,3 +6,5 @@ services:
       - "8000:8000"
     volumes:
       - ./outputs:/app/outputs
+    environment:
+      - ELEVEN_LABS_APIKEY=${ELEVEN_LABS_APIKEY:-}
