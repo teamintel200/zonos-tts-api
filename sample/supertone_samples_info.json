@@ -1,0 +1,93 @@
+{
+  "supertone_voice_samples": {
+    "description": "Supertone TTS API로 생성된 실제 음성 샘플들",
+    "generation_date": "2025-01-22",
+    "api_version": "v1",
+    "samples": [
+      {
+        "filename": "supertone_adam_sample.wav",
+        "voice_id": "91992bbd4758bdcf9c9b01",
+        "voice_name": "Adam",
+        "gender": "male",
+        "language": "ko",
+        "style": "neutral",
+        "text": "안녕하세요, 수퍼톤 API 샘플 음성입니다. 이것은 Adam 음성으로 생성되었습니다.",
+        "duration_seconds": 6.97,
+        "file_size_kb": 600.8,
+        "use_case": "기본 한국어 샘플"
+      },
+      {
+        "filename": "supertone_agatha_happy.wav",
+        "voice_id": "e5f6fb1a53d0add87afb4f",
+        "voice_name": "Agatha",
+        "gender": "female",
+        "language": "ko",
+        "style": "happy",
+        "text": "안녕하세요! 저는 Agatha입니다. 즐거운 마음으로 인사드려요.",
+        "duration_seconds": 5.48,
+        "file_size_kb": 472.8,
+        "use_case": "여성 음성, 기쁜 감정 표현"
+      },
+      {
+        "filename": "supertone_aiden_angry.wav",
+        "voice_id": "2d5a380030e78fcab0c82a",
+        "voice_name": "Aiden",
+        "gender": "male",
+        "language": "ko",
+        "style": "angry",
+        "text": "이건 정말 화가 나는 상황이군요! Aiden의 화난 목소리입니다.",
+        "duration_seconds": 4.92,
+        "file_size_kb": 424.8,
+        "use_case": "남성 음성, 화난 감정 표현"
+      },
+      {
+        "filename": "supertone_adam_english.wav",
+        "voice_id": "91992bbd4758bdcf9c9b01",
+        "voice_name": "Adam",
+        "gender": "male",
+        "language": "en",
+        "style": "neutral",
+        "text": "Hello! This is a Supertone English voice sample using Adam voice.",
+        "duration_seconds": 4.83,
+        "file_size_kb": 416.7,
+        "use_case": "영어 다국어 지원 샘플"
+      },
+      {
+        "filename": "supertone_adam_japanese.wav",
+        "voice_id": "91992bbd4758bdcf9c9b01",
+        "voice_name": "Adam",
+        "gender": "male",
+        "language": "ja",
+        "style": "neutral",
+        "text": "こんにちは！これはアダム音声を使用したスーパートーン日本語サンプルです。",
+        "duration_seconds": 5.29,
+        "file_size_kb": 456.8,
+        "use_case": "일본어 다국어 지원 샘플"
+      }
+    ],
+    "api_settings": {
+      "model": "sona_speech_1",
+      "voice_settings": {
+        "pitch_shift": 0,
+        "pitch_variance": 1,
+        "speed": 1
+      },
+      "output_format": "wav"
+    },
+    "supported_features": {
+      "languages": ["ko", "en", "ja"],
+      "emotions": ["neutral", "happy", "angry", "sad", "curious", "triumphant", "serene"],
+      "voice_types": ["male", "female"],
+      "use_cases": ["meme", "narration", "game", "general"]
+    },
+    "notes": [
+      "모든 샘플은 실제 Supertone API를 사용해 생성됨",
+      "각 음성마다 지원하는 감정 스타일이 다름",
+      "Adam: 기본 중성 음성 (meme 용도)",
+      "Agatha: 내레이션용 여성 음성 (3가지 감정 지원)",
+      "Aiden: 게임용 남성 음성 (7가지 감정 지원)",
+      "모든 음성이 한국어, 영어, 일본어 지원",
+      "WAV 형식, 고품질 음성 합성"
+    ]
+  }
+}

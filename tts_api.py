@@ -12,9 +12,11 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-from schemas import Segment, TTSRequest, CombineRequest, ElevenLabsTTSRequest, VoicesRequest, SpeedAdjustRequest
+from schemas import Segment, TTSRequest, CombineRequest, ElevenLabsTTSRequest, VoicesRequest, SpeedAdjustRequest, VoicevoxTTSRequest, SupertoneTTSRequest, SupertoneVoiceSampleRequest
 from utils import get_next_output_filename, validate_audio_files_for_combine, get_combined_output_path, OUTPUTS_DIR
 from elevenlabs_service import ElevenLabsService, ElevenLabsError
+from voicevox_service import VoicevoxService, VoicevoxError
+from supertone_service import SupertoneService, SupertoneError
 import librosa
 import soundfile as sf
 import tempfile
@@ -28,8 +30,16 @@ logger = logging.getLogger(__name__)
 # Initialize ElevenLabs service
 elevenlabs_service = ElevenLabsService()
 
-# Get default API key from environment
+# Initialize Voicevox service
+VOICEVOX_URL = os.getenv("VOICEVOX_URL", "http://localhost:50021")
+voicevox_service = VoicevoxService(base_url=VOICEVOX_URL)
+
+# Initialize Supertone service
+supertone_service = SupertoneService()
+
+# Get default API keys from environment
 DEFAULT_ELEVENLABS_API_KEY = os.getenv("ELEVEN_LABS_APIKEY")
+DEFAULT_SUPERTONE_API_KEY = os.getenv("SUPERTONE_APIKEY")
 
 @app.post("/tts_simple")
 async def tts_simple(req: TTSRequest = Body(...)):
@@ -190,6 +200,187 @@ async def tts_elevenlabs(req: ElevenLabsTTSRequest = Body(...)):
     logger.info(f"Successfully completed ElevenLabs TTS request for {len(results)} segments")
     return results
 
+@app.post("/tts_voicevox")
+async def tts_voicevox(req: VoicevoxTTSRequest = Body(...)):
+    """
+    Convert text to speech using Voicevox engine
+    
+    Args:
+        req: VoicevoxTTSRequest containing segments, tempdir, and voice settings
+        
+    Returns:
+        List of generated audio file information with same format as /tts_simple
+        
+    Raises:
+        HTTPException: For validation errors, connection issues, or processing failures
+    """
+    # Input validation
+    if not req.segments:
+        logger.warning("Voicevox TTS request failed: No segments provided")
+        raise HTTPException(status_code=400, detail="At least one segment is required")
+    
+    # Validate tempdir to prevent directory traversal
+    if not req.tempdir or '..' in req.tempdir or '/' in req.tempdir or '\\' in req.tempdir:
+        logger.warning(f"Voicevox TTS request failed: Invalid tempdir: {req.tempdir}")
+        raise HTTPException(status_code=400, detail="Invalid tempdir format")
+    
+    # Validate speaker_id is within reasonable range
+    if req.speaker_id < 0 or req.speaker_id > 100:  # Reasonable range for Voicevox speakers
+        logger.warning(f"Voicevox TTS request failed: Invalid speaker_id: {req.speaker_id}")
+        raise HTTPException(status_code=400, detail=f"Speaker ID {req.speaker_id} is out of valid range (0-100)")
+    
+    # Additional parameter validation beyond Pydantic constraints
+    if req.speed_scale < 0.5 or req.speed_scale > 2.0:
+        logger.warning(f"Voicevox TTS request failed: Invalid speed_scale: {req.speed_scale}")
+        raise HTTPException(status_code=400, detail="Speed scale must be between 0.5 and 2.0")
+    
+    if req.pitch_scale < -0.15 or req.pitch_scale > 0.15:
+        logger.warning(f"Voicevox TTS request failed: Invalid pitch_scale: {req.pitch_scale}")
+        raise HTTPException(status_code=400, detail="Pitch scale must be between -0.15 and 0.15")
+    
+    if req.intonation_scale < 0.0 or req.intonation_scale > 2.0:
+        logger.warning(f"Voicevox TTS request failed: Invalid intonation_scale: {req.intonation_scale}")
+        raise HTTPException(status_code=400, detail="Intonation scale must be between 0.0 and 2.0")
+    
+    if req.volume_scale < 0.0 or req.volume_scale > 2.0:
+        logger.warning(f"Voicevox TTS request failed: Invalid volume_scale: {req.volume_scale}")
+        raise HTTPException(status_code=400, detail="Volume scale must be between 0.0 and 2.0")
+    
+    if req.pre_phoneme_length < 0.0 or req.pre_phoneme_length > 1.5:
+        logger.warning(f"Voicevox TTS request failed: Invalid pre_phoneme_length: {req.pre_phoneme_length}")
+        raise HTTPException(status_code=400, detail="Pre-phoneme length must be between 0.0 and 1.5")
+    
+    if req.post_phoneme_length < 0.0 or req.post_phoneme_length > 1.5:
+        logger.warning(f"Voicevox TTS request failed: Invalid post_phoneme_length: {req.post_phoneme_length}")
+        raise HTTPException(status_code=400, detail="Post-phoneme length must be between 0.0 and 1.5")
+    
+    # Validate text content and length for each segment
+    for segment in req.segments:
+        if not segment.text or not segment.text.strip():
+            logger.warning(f"Voicevox TTS request failed: Empty text in segment {segment.id}")
+            raise HTTPException(status_code=400, detail=f"Segment {segment.id} has empty text")
+        
+        if len(segment.text) > 1000:  # Voicevox typical limit
+            logger.warning(f"Voicevox TTS request failed: Text too long in segment {segment.id}")
+            raise HTTPException(status_code=400, detail=f"Segment {segment.id} text exceeds 1000 characters")
+        
+        # Check for potentially problematic characters
+        if any(ord(char) > 65535 for char in segment.text):  # Check for characters outside BMP
+            logger.warning(f"Voicevox TTS request failed: Unsupported characters in segment {segment.id}")
+            raise HTTPException(status_code=400, detail=f"Segment {segment.id} contains unsupported characters")
+    
+    # Check if Voicevox service is available before processing
+    try:
+        # Quick connection test
+        voicevox_service._validate_connection()
+    except VoicevoxError as e:
+        logger.error(f"Voicevox engine connection check failed: {e.message}")
+        if e.status_code == 503:
+            raise HTTPException(
+                status_code=503, 
+                detail="Voicevox engine is not available. Please ensure the engine is running and accessible."
+            )
+        else:
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to connect to Voicevox engine. Please try again later."
+            )
+    
+    logger.info(f"Processing Voicevox TTS request for {len(req.segments)} segments in tempdir: {req.tempdir}")
+    
+    results = []
+    for segment in req.segments:
+        # Generate WAV output path for Voicevox
+        output_path = get_next_output_filename(req.tempdir, extension="wav")
+        logger.info(f"Processing segment {segment.id} with {len(segment.text)} characters")
+        
+        try:
+            # Generate audio using Voicevox service
+            audio_data = voicevox_service.text_to_speech(
+                text=segment.text,
+                speaker_id=req.speaker_id,
+                speed_scale=req.speed_scale,
+                pitch_scale=req.pitch_scale,
+                intonation_scale=req.intonation_scale,
+                volume_scale=req.volume_scale,
+                pre_phoneme_length=req.pre_phoneme_length,
+                post_phoneme_length=req.post_phoneme_length,
+                enable_interrogative_upspeak=req.enable_interrogative_upspeak
+            )
+            
+            # Save audio data to file
+            with open(output_path, 'wb') as f:
+                f.write(audio_data)
+            
+            # Get duration using pydub (same format as other TTS endpoints)
+            audio = AudioSegment.from_wav(output_path)
+            duration_ms = len(audio)
+            
+            results.append({
+                "sequence": segment.id,
+                "text": segment.text,
+                "durationMillis": duration_ms,
+                "path": output_path
+            })
+            
+            logger.info(f"Successfully processed segment {segment.id}, duration: {duration_ms}ms")
+            
+        except VoicevoxError as e:
+            # Log error without exposing sensitive information
+            logger.error(f"Voicevox API error for segment {segment.id}: {e.message} (status: {e.status_code})")
+            
+            # Handle specific Voicevox errors with appropriate HTTP status codes
+            if e.status_code == 503:
+                raise HTTPException(
+                    status_code=503, 
+                    detail="Cannot connect to Voicevox engine. Please ensure the engine is running."
+                )
+            elif e.status_code == 400:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid request parameters: {e.message}"
+                )
+            elif e.status_code == 404:
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"Invalid speaker ID: {req.speaker_id}. Please check the speaker ID and try again."
+                )
+            elif e.status_code == 422:
+                raise HTTPException(
+                    status_code=422, 
+                    detail=f"Invalid text or speaker parameters: {e.message}"
+                )
+            else:
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Voicevox TTS generation failed. Please try again."
+                )
+                
+        except FileNotFoundError as e:
+            logger.error(f"File system error for segment {segment.id}: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to save audio file. Please check server configuration."
+            )
+            
+        except PermissionError as e:
+            logger.error(f"Permission error for segment {segment.id}: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail="Permission denied when saving audio file. Please check server permissions."
+            )
+            
+        except Exception as e:
+            # Log unexpected errors without exposing sensitive information
+            logger.error(f"Unexpected error processing segment {segment.id}: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail="An unexpected error occurred during TTS generation. Please try again."
+            )
+    
+    logger.info(f"Successfully completed Voicevox TTS request for {len(results)} segments")
+    return results
+
 @app.post("/combine_wav")
 async def combine_wav(req: CombineRequest = Body(...)):
     """
@@ -215,11 +406,15 @@ async def combine_wav(req: CombineRequest = Body(...)):
         files = validate_audio_files_for_combine(req.tempdir)
         logger.info(f"Found {len(files)} audio files to combine")
         
-        # Combine all audio files (works with mixed gTTS/ElevenLabs files)
+        # Combine all audio files (works with mixed gTTS/ElevenLabs/Voicevox files)
         combined = AudioSegment.empty()
         for i, file_path in enumerate(files, 1):
             try:
-                sound = AudioSegment.from_mp3(file_path)
+                # Auto-detect file format based on extension
+                if file_path.lower().endswith('.wav'):
+                    sound = AudioSegment.from_wav(file_path)
+                else:
+                    sound = AudioSegment.from_mp3(file_path)
                 combined += sound
                 logger.debug(f"Added file {i}/{len(files)}: {os.path.basename(file_path)}")
             except Exception as e:
@@ -437,6 +632,168 @@ async def get_elevenlabs_voice_sample(voice_id: str, req: VoicesRequest = Body(.
             detail="An unexpected error occurred while generating voice sample. Please try again."
         )
 
+@app.get("/voices/voicevox")
+async def get_voicevox_voices():
+    """
+    Retrieve list of available free Voicevox voices for commercial use
+    
+    Returns:
+        List of available free Voicevox speakers with their details
+        
+    Raises:
+        HTTPException: For connection errors or API failures
+    """
+    logger.info("Processing Voicevox voices request")
+    
+    try:
+        # Get available free voices using Voicevox service
+        speakers_list = voicevox_service.get_speakers()
+        
+        # Convert to dict format for JSON response
+        speakers_response = [
+            {
+                "speaker_id": speaker.speaker_id,
+                "name": speaker.name,
+                "english_name": speaker.english_name,
+                "style_id": speaker.style_id,
+                "style_name": speaker.style_name,
+                "english_style_name": speaker.english_style_name,
+                "type": speaker.type,
+                "is_free": speaker.is_free
+            }
+            for speaker in speakers_list
+        ]
+        
+        logger.info(f"Successfully retrieved {len(speakers_response)} free Voicevox speakers")
+        return speakers_response
+        
+    except VoicevoxError as e:
+        # Log error and handle specific Voicevox errors
+        logger.error(f"Voicevox API error retrieving speakers: {e.message} (status: {e.status_code})")
+        
+        # Handle specific Voicevox errors with appropriate HTTP status codes
+        if e.status_code == 503:
+            raise HTTPException(
+                status_code=503, 
+                detail="Cannot connect to Voicevox engine. Please ensure the engine is running and accessible."
+            )
+        else:
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to retrieve Voicevox voices. Please try again."
+            )
+            
+    except Exception as e:
+        # Log unexpected errors without exposing sensitive information
+        logger.error(f"Unexpected error retrieving Voicevox voices: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="An unexpected error occurred while retrieving Voicevox voices. Please try again."
+        )
+
+@app.get("/voices/voicevox/{speaker_id}/sample")
+async def get_voicevox_voice_sample(speaker_id: int):
+    """
+    Get voice sample audio for preview using Voicevox
+    
+    Args:
+        speaker_id: ID of the Voicevox speaker to preview
+        
+    Returns:
+        StreamingResponse: Audio sample as streaming response in WAV format
+        
+    Raises:
+        HTTPException: For invalid speaker_id, connection errors, or API failures
+    """
+    # Input validation
+    if speaker_id < 0 or speaker_id > 100:  # Reasonable range for Voicevox speakers
+        logger.warning(f"Voicevox voice sample request failed: Invalid speaker_id: {speaker_id}")
+        raise HTTPException(status_code=400, detail=f"Speaker ID {speaker_id} is out of valid range (0-100)")
+    
+    logger.info(f"Processing Voicevox voice sample request for speaker: {speaker_id}")
+    
+    try:
+        # Get voice sample using Voicevox service
+        audio_data = voicevox_service.get_speaker_preview(speaker_id)
+        
+        # Save sample to outputs directory for reference
+        sample_filename = f"voicevox_sample_speaker_{speaker_id}.wav"
+        sample_path = os.path.join(OUTPUTS_DIR, sample_filename)
+        
+        # Ensure outputs directory exists
+        os.makedirs(OUTPUTS_DIR, exist_ok=True)
+        
+        # Save the sample file
+        with open(sample_path, 'wb') as f:
+            f.write(audio_data)
+        
+        logger.info(f"Successfully generated voice sample for speaker: {speaker_id}, saved to: {sample_path}")
+        
+        return StreamingResponse(
+            io.BytesIO(audio_data),
+            media_type="audio/wav",
+            headers={
+                "Content-Disposition": f"attachment; filename=voicevox_sample_{speaker_id}.wav"
+            }
+        )
+        
+    except VoicevoxError as e:
+        # Log error and handle specific Voicevox errors
+        logger.error(f"Voicevox API error getting voice sample for {speaker_id}: {e.message} (status: {e.status_code})")
+        
+        # Handle specific Voicevox errors with appropriate HTTP status codes
+        if e.status_code == 503:
+            raise HTTPException(
+                status_code=503, 
+                detail="Cannot connect to Voicevox engine. Please ensure the engine is running and accessible."
+            )
+        elif e.status_code == 404 or e.status_code == 422:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid speaker ID: {speaker_id}. Please check the speaker ID and try again."
+            )
+        else:
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to generate voice sample. Please try again."
+            )
+            
+    except Exception as e:
+        # Log unexpected errors without exposing sensitive information
+        logger.error(f"Unexpected error getting voice sample for {speaker_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="An unexpected error occurred while generating voice sample. Please try again."
+        )
+        if e.status_code == 404:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Speaker not found: {speaker_id}. Please check the speaker ID and try again."
+            )
+        elif e.status_code == 503:
+            raise HTTPException(
+                status_code=503, 
+                detail="Cannot connect to Voicevox engine. Please ensure the engine is running and accessible."
+            )
+        elif e.status_code == 400 or e.status_code == 422:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid speaker ID: {speaker_id}. Please use a valid speaker ID."
+            )
+        else:
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to generate voice sample. Please try again."
+            )
+            
+    except Exception as e:
+        # Log unexpected errors without exposing sensitive information
+        logger.error(f"Unexpected error getting voice sample for speaker {speaker_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="An unexpected error occurred while generating voice sample. Please try again."
+        )
+
 @app.post("/speed_adjust")
 async def speed_adjust(req: SpeedAdjustRequest = Body(...)):
     """
@@ -535,5 +892,291 @@ async def speed_adjust(req: SpeedAdjustRequest = Body(...)):
         raise HTTPException(
             status_code=500, 
             detail=f"Speed adjustment failed: {str(e)}"
+        )
+
+@app.post("/tts_supertone")
+async def tts_supertone(req: SupertoneTTSRequest = Body(...)):
+    """
+    Convert text to speech using Supertone API
+    
+    Args:
+        req: SupertoneTTSRequest containing segments, tempdir, and voice settings
+        
+    Returns:
+        List of generated audio file information with same format as other TTS endpoints
+        
+    Raises:
+        HTTPException: For validation errors, authentication issues, or processing failures
+    """
+    # Use environment API key if not provided in request
+    api_key = req.api_key or DEFAULT_SUPERTONE_API_KEY
+    
+    # Input validation
+    if not api_key or not api_key.strip():
+        logger.warning("Supertone TTS request failed: Missing API key")
+        raise HTTPException(status_code=400, detail="API key is required (provide in request or set SUPERTONE_APIKEY environment variable)")
+    
+    if not req.segments:
+        logger.warning("Supertone TTS request failed: No segments provided")
+        raise HTTPException(status_code=400, detail="At least one segment is required")
+    
+    # Validate language code
+    if req.language not in ["ko", "en", "ja"]:
+        logger.warning(f"Supertone TTS request failed: Invalid language: {req.language}")
+        raise HTTPException(status_code=400, detail="Language must be one of: ko, en, ja")
+    
+    # Validate tempdir to prevent directory traversal
+    if not req.tempdir or '..' in req.tempdir or '/' in req.tempdir or '\\' in req.tempdir:
+        logger.warning(f"Supertone TTS request failed: Invalid tempdir: {req.tempdir}")
+        raise HTTPException(status_code=400, detail="Invalid tempdir format")
+    
+    # Validate text length for each segment
+    for segment in req.segments:
+        if not segment.text or not segment.text.strip():
+            logger.warning(f"Supertone TTS request failed: Empty text in segment {segment.id}")
+            raise HTTPException(status_code=400, detail=f"Segment {segment.id} has empty text")
+        
+        if len(segment.text) > 300:  # Supertone limit
+            logger.warning(f"Supertone TTS request failed: Text too long in segment {segment.id}")
+            raise HTTPException(status_code=400, detail=f"Segment {segment.id} text exceeds 300 characters")
+    
+    logger.info(f"Processing Supertone TTS request for {len(req.segments)} segments in tempdir: {req.tempdir}")
+    
+    results = []
+    for segment in req.segments:
+        # Generate output path based on output format
+        extension = "wav" if req.output_format == "wav" else "mp3"
+        output_path = get_next_output_filename(req.tempdir, extension=extension)
+        logger.info(f"Processing segment {segment.id} with {len(segment.text)} characters")
+        
+        try:
+            # Generate audio using Supertone service
+            audio_data = supertone_service.text_to_speech(
+                api_key=api_key,
+                text=segment.text,
+                voice_id=req.voice_id,
+                language=req.language,
+                style=req.style,
+                model=req.model,
+                pitch_shift=req.pitch_shift,
+                pitch_variance=req.pitch_variance,
+                speed=req.speed,
+                output_format=req.output_format
+            )
+            
+            # Save audio data to file
+            with open(output_path, 'wb') as f:
+                f.write(audio_data)
+            
+            # Get duration using pydub (same format as other TTS endpoints)
+            if extension == "wav":
+                audio = AudioSegment.from_wav(output_path)
+            else:
+                audio = AudioSegment.from_mp3(output_path)
+            duration_ms = len(audio)
+            
+            results.append({
+                "sequence": segment.id,
+                "text": segment.text,
+                "durationMillis": duration_ms,
+                "path": output_path
+            })
+            
+            logger.info(f"Successfully processed segment {segment.id}, duration: {duration_ms}ms")
+            
+        except SupertoneError as e:
+            # Log error without exposing API key
+            logger.error(f"Supertone API error for segment {segment.id}: {e.message} (status: {e.status_code})")
+            
+            # Handle specific Supertone errors with appropriate HTTP status codes
+            if e.status_code == 401:
+                raise HTTPException(
+                    status_code=401, 
+                    detail="Invalid Supertone API key. Please check your API key and try again."
+                )
+            elif e.status_code == 429:
+                raise HTTPException(
+                    status_code=429, 
+                    detail="Supertone API rate limit exceeded. Please wait and try again later."
+                )
+            elif e.status_code == 400:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid request parameters: {e.message}"
+                )
+            elif e.status_code == 404:
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"Voice or style not found: {e.message}"
+                )
+            elif e.status_code == 503:
+                raise HTTPException(
+                    status_code=503, 
+                    detail="Supertone service is temporarily unavailable. Please try again later."
+                )
+            else:
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Supertone TTS generation failed. Please try again."
+                )
+                
+        except FileNotFoundError as e:
+            logger.error(f"File system error for segment {segment.id}: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to save audio file. Please check server configuration."
+            )
+            
+        except PermissionError as e:
+            logger.error(f"Permission error for segment {segment.id}: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail="Permission denied when saving audio file. Please check server permissions."
+            )
+            
+        except Exception as e:
+            # Log unexpected errors without exposing sensitive information
+            logger.error(f"Unexpected error processing segment {segment.id}: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail="An unexpected error occurred during TTS generation. Please try again."
+            )
+    
+    logger.info(f"Successfully completed Supertone TTS request for {len(results)} segments")
+    return results
+
+@app.get("/voices/supertone")
+async def get_supertone_voices():
+    """
+    Retrieve list of available Supertone voices
+    
+    Returns:
+        List of available Supertone voices with their characteristics
+        
+    Raises:
+        HTTPException: For API failures
+    """
+    logger.info("Processing Supertone voices request")
+    
+    try:
+        # Get available voices using Supertone service
+        voices_list = supertone_service.get_available_voices()
+        
+        # Convert to dict format for JSON response
+        voices_response = [
+            {
+                "voice_id": voice.voice_id,
+                "name": voice.name,
+                "gender": voice.gender,
+                "age": voice.age,
+                "use_case": voice.use_case,
+                "supported_languages": voice.supported_languages,
+                "available_styles": voice.available_styles
+            }
+            for voice in voices_list
+        ]
+        
+        logger.info(f"Successfully retrieved {len(voices_response)} Supertone voices")
+        return voices_response
+        
+    except Exception as e:
+        # Log unexpected errors without exposing sensitive information
+        logger.error(f"Unexpected error retrieving Supertone voices: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="An unexpected error occurred while retrieving Supertone voices. Please try again."
+        )
+
+@app.post("/voices/supertone/{voice_id}/sample")
+async def get_supertone_voice_sample(voice_id: str, req: SupertoneVoiceSampleRequest = Body(...)):
+    """
+    Get voice sample audio for preview using Supertone
+    
+    Args:
+        voice_id: ID of the Supertone voice to preview
+        req: SupertoneVoiceSampleRequest containing API key, language, style, and optional custom text
+        
+    Returns:
+        StreamingResponse: Audio sample as streaming response
+        
+    Raises:
+        HTTPException: For authentication errors, invalid voice_id, or API failures
+    """
+    # Use environment API key if not provided in request
+    api_key = req.api_key or DEFAULT_SUPERTONE_API_KEY
+    
+    # Input validation
+    if not api_key or not api_key.strip():
+        logger.warning(f"Supertone voice sample request failed: Missing API key for voice {voice_id}")
+        raise HTTPException(status_code=400, detail="API key is required (provide in request or set SUPERTONE_APIKEY environment variable)")
+    
+    if not voice_id or not voice_id.strip():
+        logger.warning("Supertone voice sample request failed: Missing voice_id")
+        raise HTTPException(status_code=400, detail="Voice ID is required")
+    
+    # Validate language
+    if req.language not in ["ko", "en", "ja"]:
+        logger.warning(f"Supertone voice sample request failed: Invalid language: {req.language}")
+        raise HTTPException(status_code=400, detail="Language must be one of: ko, en, ja")
+    
+    logger.info(f"Processing Supertone voice sample request for voice: {voice_id}, language: {req.language}, style: {req.style}")
+    
+    try:
+        # Get voice sample using Supertone service with custom parameters
+        audio_data = supertone_service.get_voice_preview(
+            api_key=api_key, 
+            voice_id=voice_id, 
+            language=req.language, 
+            style=req.style,
+            custom_text=req.sample_text
+        )
+        
+        logger.info(f"Successfully generated voice sample for voice: {voice_id}")
+        
+        return StreamingResponse(
+            io.BytesIO(audio_data),
+            media_type="audio/wav",
+            headers={
+                "Content-Disposition": f"attachment; filename=supertone_sample_{voice_id}.wav"
+            }
+        )
+        
+    except SupertoneError as e:
+        # Log error without exposing API key
+        logger.error(f"Supertone API error getting voice sample for {voice_id}: {e.message} (status: {e.status_code})")
+        
+        # Handle specific Supertone errors with appropriate HTTP status codes
+        if e.status_code == 401:
+            raise HTTPException(
+                status_code=401, 
+                detail="Invalid Supertone API key. Please check your API key and try again."
+            )
+        elif e.status_code == 404:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Voice not found: {voice_id}. Please check the voice ID and try again."
+            )
+        elif e.status_code == 429:
+            raise HTTPException(
+                status_code=429, 
+                detail="Supertone API rate limit exceeded. Please wait and try again later."
+            )
+        elif e.status_code == 503:
+            raise HTTPException(
+                status_code=503, 
+                detail="Supertone service is temporarily unavailable. Please try again later."
+            )
+        else:
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to generate voice sample. Please try again."
+            )
+            
+    except Exception as e:
+        # Log unexpected errors without exposing sensitive information
+        logger.error(f"Unexpected error getting voice sample for {voice_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="An unexpected error occurred while generating voice sample. Please try again."
         )
 

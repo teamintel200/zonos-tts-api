@@ -8,3 +8,25 @@ services:
       - ./outputs:/app/outputs
     environment:
       - ELEVEN_LABS_APIKEY=${ELEVEN_LABS_APIKEY:-}
+      - VOICEVOX_URL=http://voicevox-engine:50021
+    depends_on:
+      - voicevox-engine
+    networks:
+      - tts-network
+
+  voicevox-engine:
+    image: voicevox/voicevox_engine:cpu-latest
+    ports:
+      - "50021:50021"
+    networks:
+      - tts-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:50021/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+networks:
+  tts-network:
+    driver: bridge

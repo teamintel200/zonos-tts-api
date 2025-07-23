@@ -1,0 +1,19 @@
+{
+  "engine": "gTTS (Google Text-to-Speech)",
+  "description": "Google의 무료 텍스트 음성 변환 서비스",
+  "language": "Korean (ko)",
+  "text": "안녕하세요! 이것은 한국어 음성 샘플입니다.",
+  "duration_ms": 4368,
+  "file": "gtts_sample.mp3",
+  "features": [
+    "무료 사용 가능",
+    "자연스러운 한국어 발음",
+    "인터넷 연결 필요",
+    "MP3 형식 출력"
+  ],
+  "use_cases": [
+    "기본적인 한국어 TTS",
+    "프로토타입 개발",
+    "간단한 음성 안내"
+  ]
+}
