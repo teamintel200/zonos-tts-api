@@ -15,7 +15,7 @@ class CombineRequest(BaseModel):
 class ElevenLabsTTSRequest(BaseModel):
     segments: List[Segment]
     tempdir: str
-    api_key: Optional[str] = None  # Optional - will use environment variable if not provided
+    api_key: str = Field(description="ElevenLabs API key (required)")
     voice_id: Optional[str] = None
     stability: Optional[float] = Field(default=0.5, ge=0.0, le=1.0)
     similarity_boost: Optional[float] = Field(default=0.8, ge=0.0, le=1.0)
@@ -26,10 +26,10 @@ class ElevenLabsTTSRequest(BaseModel):
     output_format: Optional[str] = Field(default="mp3_44100_128")  # 오디오 품질
 
 class VoicesRequest(BaseModel):
-    api_key: Optional[str] = None  # Optional - will use environment variable if not provided
+    api_key: str = Field(description="API key (required)")
 
 class SupertoneVoiceSampleRequest(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str = Field(description="Supertone API key (required)")
     language: Optional[str] = Field(default="ko", description="Language code (ko, en, ja)")
     style: Optional[str] = Field(default="neutral", description="Voice style for preview")
     sample_text: Optional[str] = Field(default=None, description="Custom sample text (optional)")
@@ -71,7 +71,7 @@ class VoicevoxSpeaker(BaseModel):
 class SupertoneTTSRequest(BaseModel):
     segments: List[Segment]
     tempdir: str
-    api_key: Optional[str] = None
+    api_key: str = Field(description="Supertone API key (required)")
     voice_id: str = Field(description="Supertone voice identifier")
     language: str = Field(default="ko", description="Language code (ko, en, ja)")
     style: Optional[str] = Field(default="neutral", description="Emotional style (neutral, happy, sad, angry, etc.)")
@@ -89,3 +89,25 @@ class SupertoneVoice(BaseModel):
     use_case: Optional[str] = Field(description="Recommended use case")
     supported_languages: List[str] = Field(description="Supported language codes")
     available_styles: List[str] = Field(description="Available emotional styles")
+
+class SktAxTTSRequest(BaseModel):
+    segments: List[Segment]
+    tempdir: str
+    api_key: str = Field(description="SKT A.X TTS API key (required)")
+    voice: str = Field(description="SKT A.X TTS voice name (model is auto-determined)")
+    speed: Optional[str] = Field(default="1.0", description="Speech speed (e.g., '0.8', '1.0', '1.3')")
+    sr: Optional[int] = Field(default=22050, description="Sample rate (default: 22050)")
+    sformat: Optional[str] = Field(default="wav", description="Output format (wav, mp3)")
+
+class SktAxVoice(BaseModel):
+    voice_name: str = Field(description="Voice name identifier")
+    voice_id: str = Field(description="Internal voice ID")
+    model: str = Field(description="Model name (axtts-2-6, axtts-2-1, axtts-2-1-dialect)")
+    gender: str = Field(description="Voice gender")
+    age: str = Field(description="Voice age range")
+    style: str = Field(description="Voice style and characteristics")
+    nickname: str = Field(description="Voice nickname")
+    language: str = Field(description="Language code (ko-KR)")
+
+class SktAxVoicesRequest(BaseModel):
+    api_key: str = Field(description="SKT A.X TTS API key (required)")

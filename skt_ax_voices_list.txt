@@ -1,0 +1,53 @@
+SKT A.X TTS 음성 목록 (총 49개)
+=================================
+
+no,voice_name,gender,age,style
+1,albert,male,child,character
+2,andy,male,adult,general
+3,andrew,male,adult,general
+4,aria,female,adult,"general, kind, callcenter"
+5,aria_call,female,adult,callcenter
+6,aria_chitchat,female,adult,bright
+7,aria_dj,female,adult,dj
+8,bell,female,adult,news
+9,bitna,female,adult,friendly
+10,daeho,male,adult,general
+11,daisy,female,child,character
+12,david,male,adult,general
+13,doyun,male,child,general
+14,emma,female,adult,general
+15,fjja,female,adult,jeollado
+16,fkhk0,female,adult,news reporter
+17,fljh,female,adult,chungcheongdo
+18,fpje0,female,adult,news reporter
+19,frjh,female,adult,gyeongsangdo
+20,fysy0,female,adult,news reporter
+21,hamin,male,adult,general
+22,haru,male,adult,friendly
+23,hayun,female,child,general
+24,jay,female,adult,friendly
+25,jemma,female,adult,general
+26,jian,female,child,general
+27,jiho,male,child,general
+28,jihun,male,adult,general
+29,jiyoung,female,adult,general
+30,juwon,male,adult,general
+31,kody,female,child,character
+32,lily,female,child,character
+33,lucy,female,adult,general
+34,matthew,male,adult,general
+35,mkdd,male,adult,gyeongsangdo
+36,mkjh0,male,adult,news reporter
+37,mksh,male,adult,jeollado
+38,mkws,male,adult,chungcheongdo
+39,mswj0,male,adult,news reporter
+40,msth0,male,adult,news reporter
+41,natalie,female,adult,general
+42,oliver,male,adult,"general, callcenter"
+43,olivia,female,adult,general
+44,polar,female,child,character
+45,scarlett,female,adult,general
+46,seohyun,female,child,general
+47,seojun,male,child,general
+48,sophie,female,adult,"general, kind"
+49,tiffany,female,adult,callcenter

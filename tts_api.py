@@ -12,11 +12,12 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-from schemas import Segment, TTSRequest, CombineRequest, ElevenLabsTTSRequest, VoicesRequest, SpeedAdjustRequest, VoicevoxTTSRequest, SupertoneTTSRequest, SupertoneVoiceSampleRequest
+from schemas import Segment, TTSRequest, CombineRequest, ElevenLabsTTSRequest, VoicesRequest, SpeedAdjustRequest, VoicevoxTTSRequest, SupertoneTTSRequest, SupertoneVoiceSampleRequest, SktAxTTSRequest, SktAxVoicesRequest
 from utils import get_next_output_filename, validate_audio_files_for_combine, get_combined_output_path, OUTPUTS_DIR
 from elevenlabs_service import ElevenLabsService, ElevenLabsError
 from voicevox_service import VoicevoxService, VoicevoxError
 from supertone_service import SupertoneService, SupertoneError
+from skt_ax_service import SktAxService, SktAxError
 import librosa
 import soundfile as sf
 import tempfile
@@ -37,9 +38,10 @@ voicevox_service = VoicevoxService(base_url=VOICEVOX_URL)
 # Initialize Supertone service
 supertone_service = SupertoneService()
 
-# Get default API keys from environment
-DEFAULT_ELEVENLABS_API_KEY = os.getenv("ELEVEN_LABS_APIKEY")
-DEFAULT_SUPERTONE_API_KEY = os.getenv("SUPERTONE_APIKEY")
+# Initialize SKT A.X service
+skt_ax_service = SktAxService()
+
+# API keys are now required parameters in requests
 
 @app.post("/tts_simple")
 async def tts_simple(req: TTSRequest = Body(...)):
@@ -64,13 +66,13 @@ async def tts_simple(req: TTSRequest = Body(...)):
 
 @app.post("/tts_elevenlabs")
 async def tts_elevenlabs(req: ElevenLabsTTSRequest = Body(...)):
-    # Use environment API key if not provided in request
-    api_key = req.api_key or DEFAULT_ELEVENLABS_API_KEY
+    # API key is now required in request
+    api_key = req.api_key
     
     # Input validation
     if not api_key or not api_key.strip():
         logger.warning("ElevenLabs TTS request failed: Missing API key")
-        raise HTTPException(status_code=400, detail="API key is required (provide in request or set ELEVEN_LABS_APIKEY environment variable)")
+        raise HTTPException(status_code=400, detail="API key is required")
     
     if not req.segments:
         logger.warning("ElevenLabs TTS request failed: No segments provided")
@@ -485,13 +487,13 @@ async def get_elevenlabs_voices(req: VoicesRequest = Body(...)):
     Raises:
         HTTPException: For authentication errors or API failures
     """
-    # Use environment API key if not provided in request
-    api_key = req.api_key or DEFAULT_ELEVENLABS_API_KEY
+    # API key is now required in request
+    api_key = req.api_key
     
     # Input validation
     if not api_key or not api_key.strip():
         logger.warning("ElevenLabs voices request failed: Missing API key")
-        raise HTTPException(status_code=400, detail="API key is required (provide in request or set ELEVEN_LABS_APIKEY environment variable)")
+        raise HTTPException(status_code=400, detail="API key is required")
     
     logger.info("Processing ElevenLabs voices request")
     
@@ -562,13 +564,13 @@ async def get_elevenlabs_voice_sample(voice_id: str, req: VoicesRequest = Body(.
     Raises:
         HTTPException: For authentication errors, invalid voice_id, or API failures
     """
-    # Use environment API key if not provided in request
-    api_key = req.api_key or DEFAULT_ELEVENLABS_API_KEY
+    # API key is now required in request
+    api_key = req.api_key
     
     # Input validation
     if not api_key or not api_key.strip():
         logger.warning(f"ElevenLabs voice sample request failed: Missing API key for voice {voice_id}")
-        raise HTTPException(status_code=400, detail="API key is required (provide in request or set ELEVEN_LABS_APIKEY environment variable)")
+        raise HTTPException(status_code=400, detail="API key is required")
     
     if not voice_id or not voice_id.strip():
         logger.warning("ElevenLabs voice sample request failed: Missing voice_id")
@@ -908,13 +910,13 @@ async def tts_supertone(req: SupertoneTTSRequest = Body(...)):
     Raises:
         HTTPException: For validation errors, authentication issues, or processing failures
     """
-    # Use environment API key if not provided in request
-    api_key = req.api_key or DEFAULT_SUPERTONE_API_KEY
+    # API key is now required in request
+    api_key = req.api_key
     
     # Input validation
     if not api_key or not api_key.strip():
         logger.warning("Supertone TTS request failed: Missing API key")
-        raise HTTPException(status_code=400, detail="API key is required (provide in request or set SUPERTONE_APIKEY environment variable)")
+        raise HTTPException(status_code=400, detail="API key is required")
     
     if not req.segments:
         logger.warning("Supertone TTS request failed: No segments provided")
@@ -1102,13 +1104,13 @@ async def get_supertone_voice_sample(voice_id: str, req: SupertoneVoiceSampleReq
     Raises:
         HTTPException: For authentication errors, invalid voice_id, or API failures
     """
-    # Use environment API key if not provided in request
-    api_key = req.api_key or DEFAULT_SUPERTONE_API_KEY
+    # API key is now required in request
+    api_key = req.api_key
     
     # Input validation
     if not api_key or not api_key.strip():
         logger.warning(f"Supertone voice sample request failed: Missing API key for voice {voice_id}")
-        raise HTTPException(status_code=400, detail="API key is required (provide in request or set SUPERTONE_APIKEY environment variable)")
+        raise HTTPException(status_code=400, detail="API key is required")
     
     if not voice_id or not voice_id.strip():
         logger.warning("Supertone voice sample request failed: Missing voice_id")
@@ -1180,3 +1182,347 @@ async def get_supertone_voice_sample(voice_id: str, req: SupertoneVoiceSampleReq
             detail="An unexpected error occurred while generating voice sample. Please try again."
         )
 
+@app.post("/tts_skt_ax")
+async def tts_skt_ax(req: SktAxTTSRequest = Body(...)):
+    """
+    Convert text to speech using SKT A.X TTS API
+    
+    Args:
+        req: SktAxTTSRequest containing segments, tempdir, voice, and other settings
+        
+    Returns:
+        List of generated audio file information with same format as other TTS endpoints
+        
+    Raises:
+        HTTPException: For validation errors, API failures, or processing errors
+    """
+    # API key is now required in request
+    api_key = req.api_key
+    
+    # Input validation
+    if not api_key or not api_key.strip():
+        logger.warning("SKT A.X TTS request failed: Missing API key")
+        raise HTTPException(status_code=400, detail="API key is required")
+    
+    if not req.segments:
+        logger.warning("SKT A.X TTS request failed: No segments provided")
+        raise HTTPException(status_code=400, detail="At least one segment is required")
+    
+    if not req.voice or not req.voice.strip():
+        logger.warning("SKT A.X TTS request failed: Missing voice")
+        raise HTTPException(status_code=400, detail="Voice is required")
+    
+    # Validate tempdir to prevent directory traversal
+    if not req.tempdir or '..' in req.tempdir or '/' in req.tempdir or '\\' in req.tempdir:
+        logger.warning(f"SKT A.X TTS request failed: Invalid tempdir: {req.tempdir}")
+        raise HTTPException(status_code=400, detail="Invalid tempdir format")
+    
+    # Validate speed format
+    try:
+        speed_float = float(req.speed)
+        if speed_float < 0.5 or speed_float > 2.0:
+            logger.warning(f"SKT A.X TTS request failed: Invalid speed: {req.speed}")
+            raise HTTPException(status_code=400, detail="Speed must be between 0.5 and 2.0")
+    except ValueError:
+        logger.warning(f"SKT A.X TTS request failed: Invalid speed format: {req.speed}")
+        raise HTTPException(status_code=400, detail="Speed must be a valid number")
+    
+    # Validate sample rate
+    if req.sr not in [16000, 22050, 44100, 48000]:
+        logger.warning(f"SKT A.X TTS request failed: Invalid sample rate: {req.sr}")
+        raise HTTPException(status_code=400, detail="Sample rate must be one of: 16000, 22050, 44100, 48000")
+    
+    # Validate output format
+    if req.sformat not in ["wav", "mp3"]:
+        logger.warning(f"SKT A.X TTS request failed: Invalid format: {req.sformat}")
+        raise HTTPException(status_code=400, detail="Format must be 'wav' or 'mp3'")
+    
+    # Validate text content and length for each segment
+    for segment in req.segments:
+        if not segment.text or not segment.text.strip():
+            logger.warning(f"SKT A.X TTS request failed: Empty text in segment {segment.id}")
+            raise HTTPException(status_code=400, detail=f"Segment {segment.id} has empty text")
+        
+        if len(segment.text) > 1000:
+            logger.warning(f"SKT A.X TTS request failed: Text too long in segment {segment.id}")
+            raise HTTPException(status_code=400, detail=f"Segment {segment.id} text exceeds 1000 characters")
+    
+    logger.info(f"Processing SKT A.X TTS request for {len(req.segments)} segments in tempdir: {req.tempdir}")
+    
+    results = []
+    for segment in req.segments:
+        # Generate output path with appropriate extension
+        output_path = get_next_output_filename(req.tempdir, extension=req.sformat)
+        logger.info(f"Processing segment {segment.id} with {len(segment.text)} characters")
+        
+        try:
+            # Generate audio using SKT A.X service
+            audio_data = skt_ax_service.text_to_speech(
+                api_key=api_key,
+                text=segment.text,
+                voice=req.voice,
+                speed=req.speed,
+                sr=req.sr,
+                sformat=req.sformat
+            )
+            
+            # Save audio data to file
+            with open(output_path, 'wb') as f:
+                f.write(audio_data)
+            
+            # Get duration using pydub (same format as other TTS endpoints)
+            if req.sformat == "wav":
+                audio = AudioSegment.from_wav(output_path)
+            else:
+                audio = AudioSegment.from_mp3(output_path)
+            duration_ms = len(audio)
+            
+            results.append({
+                "sequence": segment.id,
+                "text": segment.text,
+                "durationMillis": duration_ms,
+                "path": output_path
+            })
+            
+            logger.info(f"Successfully processed segment {segment.id}, duration: {duration_ms}ms")
+            
+        except SktAxError as e:
+            # Log error without exposing API key
+            logger.error(f"SKT A.X API error for segment {segment.id}: {e.message} (status: {e.status_code})")
+            
+            # Handle specific SKT A.X errors with appropriate HTTP status codes
+            if e.status_code == 401:
+                raise HTTPException(
+                    status_code=401, 
+                    detail="Invalid SKT A.X TTS API key. Please check your API key and try again."
+                )
+            elif e.status_code == 429:
+                raise HTTPException(
+                    status_code=429, 
+                    detail="SKT A.X TTS API rate limit exceeded. Please wait and try again later."
+                )
+            elif e.status_code == 400:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid request parameters: {e.message}"
+                )
+            elif e.status_code == 404:
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"Voice not found: {e.message}"
+                )
+            elif e.status_code == 503:
+                raise HTTPException(
+                    status_code=503, 
+                    detail="SKT A.X TTS service is temporarily unavailable. Please try again later."
+                )
+            else:
+                raise HTTPException(
+                    status_code=500, 
+                    detail="SKT A.X TTS generation failed. Please try again."
+                )
+                
+        except FileNotFoundError as e:
+            logger.error(f"File system error for segment {segment.id}: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to save audio file. Please check server configuration."
+            )
+            
+        except PermissionError as e:
+            logger.error(f"Permission error for segment {segment.id}: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail="Permission denied when saving audio file. Please check server permissions."
+            )
+            
+        except Exception as e:
+            # Log unexpected errors without exposing sensitive information
+            logger.error(f"Unexpected error processing segment {segment.id}: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail="An unexpected error occurred during TTS generation. Please try again."
+            )
+    
+    logger.info(f"Successfully completed SKT A.X TTS request for {len(results)} segments")
+    return results
+
+@app.post("/voices/skt_ax")
+async def get_skt_ax_voices(req: SktAxVoicesRequest = Body(...)):
+    """
+    Retrieve list of available SKT A.X TTS voices
+    
+    Args:
+        req: SktAxVoicesRequest containing optional API key
+        
+    Returns:
+        List of available voices organized by model
+        
+    Raises:
+        HTTPException: For authentication errors or API failures
+    """
+    # API key is now required in request
+    api_key = req.api_key
+    
+    # Input validation
+    if not api_key or not api_key.strip():
+        logger.warning("SKT A.X voices request failed: Missing API key")
+        raise HTTPException(status_code=400, detail="API key is required")
+    
+    # Validate API key
+    try:
+        skt_ax_service._validate_api_key(api_key)
+    except SktAxError as e:
+        if e.status_code == 401:
+            logger.warning("SKT A.X voices request: Invalid API key provided")
+            raise HTTPException(
+                status_code=401, 
+                detail="Invalid SKT A.X TTS API key. Please check your API key."
+            )
+    
+    logger.info("Processing SKT A.X TTS voices request")
+    
+    try:
+        # Get available voices using SKT A.X service
+        voices_list = skt_ax_service.get_available_voices()
+        
+        # Convert to dict format for JSON response
+        voices_response = [
+            {
+                "voice_name": voice.voice_name,
+                "voice_id": voice.voice_id,
+                "model": voice.model,
+                "gender": voice.gender,
+                "age": voice.age,
+                "style": voice.style,
+                "nickname": voice.nickname,
+                "language": voice.language
+            }
+            for voice in voices_list
+        ]
+        
+        logger.info(f"Successfully retrieved {len(voices_response)} SKT A.X TTS voices")
+        return voices_response
+        
+    except Exception as e:
+        # Log unexpected errors without exposing sensitive information
+        logger.error(f"Unexpected error retrieving SKT A.X voices: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="An unexpected error occurred while retrieving voices. Please try again."
+        )
+
+@app.post("/voices/skt_ax/{voice_name}/sample")
+async def get_skt_ax_voice_sample(voice_name: str, req: SktAxVoicesRequest = Body(...)):
+    """
+    Get voice sample audio for preview
+    
+    Args:
+        voice_name: Name of the voice to preview
+        req: SktAxVoicesRequest containing API key
+        
+    Returns:
+        StreamingResponse: Audio sample as streaming response
+        
+    Raises:
+        HTTPException: For authentication errors, invalid voice_name, or API failures
+    """
+    # API key is now required in request
+    api_key = req.api_key
+    
+    # Input validation
+    if not api_key or not api_key.strip():
+        logger.warning(f"SKT A.X voice sample request failed: Missing API key for voice {voice_name}")
+        raise HTTPException(status_code=400, detail="API key is required")
+    
+    if not voice_name or not voice_name.strip():
+        logger.warning("SKT A.X voice sample request failed: Missing voice_name")
+        raise HTTPException(status_code=400, detail="Voice name is required")
+    
+    logger.info(f"Processing SKT A.X voice sample request for voice: {voice_name}")
+    
+    try:
+        # Get voice sample using SKT A.X service
+        audio_data = skt_ax_service.get_voice_preview(api_key, voice_name)
+        
+        logger.info(f"Successfully generated voice sample for voice: {voice_name}")
+        
+        return StreamingResponse(
+            io.BytesIO(audio_data),
+            media_type="audio/wav",
+            headers={
+                "Content-Disposition": f"attachment; filename=skt_ax_sample_{voice_name}.wav"
+            }
+        )
+        
+    except SktAxError as e:
+        # Log error without exposing API key
+        logger.error(f"SKT A.X API error getting voice sample for {voice_name}: {e.message} (status: {e.status_code})")
+        
+        # Handle specific SKT A.X errors with appropriate HTTP status codes
+        if e.status_code == 401:
+            raise HTTPException(
+                status_code=401, 
+                detail="Invalid SKT A.X TTS API key. Please check your API key and try again."
+            )
+        elif e.status_code == 404:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Voice not found: {voice_name}. Please check the voice name and try again."
+            )
+        elif e.status_code == 429:
+            raise HTTPException(
+                status_code=429, 
+                detail="SKT A.X TTS API rate limit exceeded. Please wait and try again later."
+            )
+        elif e.status_code == 503:
+            raise HTTPException(
+                status_code=503, 
+                detail="SKT A.X TTS service is temporarily unavailable. Please try again later."
+            )
+        else:
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to generate voice sample. Please try again."
+            )
+            
+    except Exception as e:
+        # Log unexpected errors without exposing sensitive information
+        logger.error(f"Unexpected error getting voice sample for {voice_name}: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="An unexpected error occurred while generating voice sample. Please try again."
+        )
+
+@app.get("/voices/skt_ax/models")
+async def get_skt_ax_models():
+    """
+    Get list of available SKT A.X TTS models
+    
+    Returns:
+        List of available model names with voice counts
+    """
+    logger.info("Processing SKT A.X models request")
+    
+    try:
+        models = skt_ax_service.get_available_models()
+        
+        # Get voice count for each model
+        models_info = []
+        for model in models:
+            voices = skt_ax_service.get_voices_by_model(model)
+            models_info.append({
+                "model": model,
+                "voice_count": len(voices),
+                "sample_voices": voices[:5]  # Show first 5 voices as examples
+            })
+        
+        logger.info(f"Successfully retrieved {len(models_info)} SKT A.X models")
+        return models_info
+        
+    except Exception as e:
+        logger.error(f"Unexpected error retrieving SKT A.X models: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="An unexpected error occurred while retrieving models. Please try again."
+        )
